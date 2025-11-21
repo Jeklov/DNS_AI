@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.0703125" android:scaleY="0.0703125">
+        <group>
+            <clip-path android:pathData="M0,0h1536v1536h-1536z" />
+            <path android:fillColor="@drawable/ic_launcher_background_gradient" android:pathData="M0,0h1536v1536h-1536z" />
+        </group>
+    </group>
+</vector>
