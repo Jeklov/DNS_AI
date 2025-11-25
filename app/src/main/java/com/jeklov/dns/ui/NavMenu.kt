@@ -22,11 +22,16 @@ import androidx.navigation.compose.rememberNavController
 import com.jeklov.dns.MainActivity
 import com.jeklov.dns.ui.composables.menu.BottomBarUI
 import com.jeklov.dns.ui.screens.Screens
+import com.jeklov.dns.ui.screens.assistant.AssistantHistoryPageUI
+import com.jeklov.dns.ui.screens.assistant.AssistantPageUI
 import com.jeklov.dns.ui.screens.cart.CartPageUI
 import com.jeklov.dns.ui.screens.catalog.CatalogPageUI
 import com.jeklov.dns.ui.screens.configurator.ConfiguratorPageUI
+import com.jeklov.dns.ui.screens.list.ProductListPageUI
 import com.jeklov.dns.ui.screens.main.MainPageUI
+import com.jeklov.dns.ui.screens.product.ProductPageUI
 import com.jeklov.dns.ui.screens.profile.ProfilePageUI
+import com.jeklov.dns.ui.screens.search.SearchPageUI
 import com.jeklov.dns.ui.screens.shorts.ShortsPageUI
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -41,6 +46,16 @@ fun NavMenuUI(
     val screenItemsBar = listOf(
         // Main
         Screens.MainPage,
+
+        Screens.SearchPage,
+
+        Screens.AssistantPage,
+
+        Screens.AssistantHistoryPage,
+
+        Screens.ProductPage,
+
+        Screens.ProductListPage,
 
         // Shorts
         Screens.ShortsPage,
@@ -105,7 +120,55 @@ fun NavMenuUI(
             composable(Screens.MainPage.screen) {
                 MainPageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
+                )
+            }
+
+            // Search page
+            composable(Screens.SearchPage.screen) {
+                SearchPageUI(
+                    paddingValues = paddingValues,
+                    navigationController = navigationController,
+                    application = application,
+                )
+            }
+
+            // Assistant page
+            composable(Screens.AssistantPage.screen + "/{prompt}") {
+                val prompt: String? = it.arguments?.getString("prompt")
+                AssistantPageUI(
+                    paddingValues = paddingValues,
+                    navigationController = navigationController,
+                    application = application,
+                    prompt = prompt,
+                )
+            }
+
+            // Assistant history page
+            composable(Screens.AssistantHistoryPage.screen) {
+                AssistantHistoryPageUI(
+                    paddingValues = paddingValues,
+                    navigationController = navigationController,
+                )
+            }
+
+            // Product page
+            composable(Screens.ProductPage.screen) {
+                ProductPageUI(
+                    paddingValues = paddingValues,
+                    navigationController = navigationController,
+                    rawProductData = null,
+                )
+            }
+
+            // Product list page
+            composable(Screens.ProductListPage.screen) {//} + "/{searchText}") {
+                val searchText: String? = it.arguments?.getString("searchText")
+                ProductListPageUI(
+                    paddingValues = paddingValues,
+                    navigationController = navigationController,
+                    //searchText = searchText,
+                    application = application,
                 )
             }
 
@@ -113,7 +176,7 @@ fun NavMenuUI(
             composable(Screens.ShortsPage.screen) {
                 ShortsPageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
                 )
             }
 
@@ -121,7 +184,7 @@ fun NavMenuUI(
             composable(Screens.ConfiguratorPage.screen) {
                 ConfiguratorPageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
                 )
             }
 
@@ -129,7 +192,7 @@ fun NavMenuUI(
             composable(Screens.CatalogPage.screen) {
                 CatalogPageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
                 )
             }
 
@@ -137,7 +200,7 @@ fun NavMenuUI(
             composable(Screens.CartPage.screen) {
                 CartPageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
                 )
             }
 
@@ -145,7 +208,7 @@ fun NavMenuUI(
             composable(Screens.ProfilePage.screen) {
                 ProfilePageUI(
                     paddingValues = paddingValues,
-                    navigationController = navigationController
+                    navigationController = navigationController,
                 )
             }
         }

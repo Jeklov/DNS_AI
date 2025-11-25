@@ -16,6 +16,48 @@ sealed class Screens(
         lottieRes = R.raw.home_nav_button_animation,
     )
 
+    // Search page
+    data object SearchPage : Screens(
+        titleRes = R.string.search_page,
+        screen = "search_page",
+        showIconOnBottomBar = false,
+        showBottomBar = false,
+    )
+
+    //Product
+
+    // Product page
+    data object ProductPage : Screens(
+        titleRes = R.string.product_page,
+        screen = "product_page",
+        lottieRes = R.raw.home_nav_button_animation,
+    )
+
+    // Product list page
+    data object ProductListPage : Screens(
+        titleRes = R.string.product_list_page,
+        screen = "product_list_page",
+        lottieRes = R.raw.home_nav_button_animation,
+    )
+
+    // Assistant
+
+    // Assistant page
+    data object AssistantPage : Screens(
+        titleRes = R.string.assistant_page,
+        screen = "assistant_page",
+        showIconOnBottomBar = false,
+        showBottomBar = false,
+    )
+
+    // Assistant history page
+    data object AssistantHistoryPage : Screens(
+        titleRes = R.string.assistant_history_page,
+        screen = "assistant_history_page",
+        showIconOnBottomBar = false,
+        showBottomBar = false,
+    )
+
     // Shorts
     data object ShortsPage : Screens(
         titleRes = R.string.shorts_page,
@@ -29,7 +71,7 @@ sealed class Screens(
         screen = "configurator_page",
         lottieRes = R.raw.rsu_nav_button_animation,
     )
-    
+
     // Catalog
     data object CatalogPage : Screens(
         titleRes = R.string.catalog_page,

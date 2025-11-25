@@ -33,6 +33,8 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+val AppTypography = Typography.applyFontFamily(PtSansFontFamily)
+
 @Composable
 fun DNSTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -52,7 +54,7 @@ fun DNSTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = AppTypography, // <-- Подставляем нашу типографику
         content = content
     )
 }

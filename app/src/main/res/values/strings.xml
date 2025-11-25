@@ -6,4 +6,9 @@
     <string name="catalog_page">Catalog</string>
     <string name="cart_page">Cart</string>
     <string name="profile_page">Profile</string>
+    <string name="search_page">Search page</string>
+    <string name="assistant_page">Assistant Page</string>
+    <string name="assistant_history_page">Assistant History Page</string>
+    <string name="product_page">Product page</string>
+    <string name="product_list_page">Product list page</string>
 </resources>
