@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.jeklov.dns.MainActivity
+import com.jeklov.dns.data.api.ai.chat.models.AIMode
 import com.jeklov.dns.ui.composables.menu.BottomBarUI
 import com.jeklov.dns.ui.screens.Screens
 import com.jeklov.dns.ui.screens.assistant.AssistantHistoryPageUI
@@ -134,13 +135,22 @@ fun NavMenuUI(
             }
 
             // Assistant page
-            composable(Screens.AssistantPage.screen + "/{prompt}") {
+            composable(Screens.AssistantPage.screen + "/{prompt}/{mode}") {
                 val prompt: String? = it.arguments?.getString("prompt")
+                val mode: String? = it.arguments?.getString("mode")
+
                 AssistantPageUI(
                     paddingValues = paddingValues,
                     navigationController = navigationController,
                     application = application,
                     prompt = prompt,
+                    contextM = context,
+                    mode = when (mode) {
+                        AIMode.Configuration.name -> AIMode.Configuration
+                        AIMode.SmartSearch.name -> AIMode.SmartSearch
+                        else -> AIMode.Text
+                    }
+
                 )
             }
 
@@ -162,12 +172,12 @@ fun NavMenuUI(
             }
 
             // Product list page
-            composable(Screens.ProductListPage.screen) {//} + "/{searchText}") {
+            composable(Screens.ProductListPage.screen + "/{searchText}") {
                 val searchText: String? = it.arguments?.getString("searchText")
                 ProductListPageUI(
                     paddingValues = paddingValues,
                     navigationController = navigationController,
-                    //searchText = searchText,
+                    searchText = searchText,
                     application = application,
                 )
             }
@@ -185,6 +195,8 @@ fun NavMenuUI(
                 ConfiguratorPageUI(
                     paddingValues = paddingValues,
                     navigationController = navigationController,
+                    contextM = context,
+
                 )
             }
 
@@ -193,6 +205,7 @@ fun NavMenuUI(
                 CatalogPageUI(
                     paddingValues = paddingValues,
                     navigationController = navigationController,
+                    application,
                 )
             }
 

@@ -3,9 +3,19 @@ package com.jeklov.dns.ui.screens.assistant
 import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -25,9 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -37,13 +49,22 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.jeklov.dns.MainActivity
 import com.jeklov.dns.R
+import com.jeklov.dns.data.api.ai.aiChat.model.AIChatViewModel
+import com.jeklov.dns.data.api.ai.chat.model.AIChatViewModelProviderFactory
+import com.jeklov.dns.data.api.ai.chat.models.AIChatRequest
+import com.jeklov.dns.data.api.ai.chat.models.AIMode
+import com.jeklov.dns.data.api.ai.chat.models.AIProductObject
+import com.jeklov.dns.data.api.ai.chat.repository.AIChatRepository
 import com.jeklov.dns.data.api.chat.models.ChatRequest
 import com.jeklov.dns.data.api.chat.repository.ChatRepository
 import com.jeklov.dns.data.api.chat.view.model.ChatViewModel
 import com.jeklov.dns.data.api.chat.view.model.ChatViewModelProviderFactory
+import com.jeklov.dns.data.user.SharedPreference
 import com.jeklov.dns.data.util.Resource
 import com.jeklov.dns.ui.screens.Screens
+import com.jeklov.dns.ui.screens.list.ProductItem
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
 
@@ -51,46 +72,103 @@ import com.mikepenz.markdown.m3.markdownTypography
 data class ChatMessage(
     val text: String,
     val isUser: Boolean,
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    // Добавляем список компонентов (предполагаю, что AIComponentModel - это тип элементов в data.components)
+    val products: List<AIProductObject>? = null,
 )
 
-// --- ENTRY POINT (ROUTE) ---
 @Composable
 fun AssistantPageUI(
     paddingValues: PaddingValues,
     navigationController: NavHostController,
     application: Application,
     prompt: String?,
+    mode: AIMode = AIMode.Text,
+    contextM: MainActivity,
 ) {
-    // 1. Инициализация ViewModel
+    // 1. Инициализация ViewModels
+    // ViewModel для обычного чата
     val viewModel: ChatViewModel = viewModel(
         factory = ChatViewModelProviderFactory(application, ChatRepository())
     )
 
+    // ViewModel для AI конфигуратора (и других режимов)
+    val aiViewModel: AIChatViewModel = viewModel(
+        factory = AIChatViewModelProviderFactory(application, AIChatRepository())
+    )
+
     // 2. Состояния
     val chatState by viewModel.chatToken.collectAsStateWithLifecycle()
+    val aiChatState by aiViewModel.aiChatToken.collectAsStateWithLifecycle()
+
     val messages = remember { mutableStateListOf<ChatMessage>() }
     val listState = rememberLazyListState()
     val context = LocalContext.current
 
-    // 3. Обработка ответов от сервера (Side Effects)
+    // Состояние текущего режима
+    var currentMode by remember { mutableStateOf(mode) }
+
+    // 3. Обработка ответов от сервера (Text Mode)
     LaunchedEffect(chatState) {
-        when (val state = chatState) {
-            is Resource.Success -> {
-                val responseText = state.data.response
-                // Проверка на дублирование (простая), чтобы не добавлять одно и то же при рекомпозиции
-                if (messages.lastOrNull()?.text != responseText) {
-                    messages.add(ChatMessage(responseText, isUser = false))
+        if (currentMode == AIMode.Text) {
+            when (val state = chatState) {
+                is Resource.Success -> {
+                    val responseText = state.data.response
+                    if (messages.lastOrNull()?.text != responseText) {
+                        messages.add(ChatMessage(responseText, isUser = false))
+                    }
+                }
+
+                is Resource.Error -> {
+                    val errorMsg = state.exception
+                    messages.add(ChatMessage(errorMsg, isUser = false, isError = true))
+                    Toast.makeText(context, "Ошибка: $errorMsg", Toast.LENGTH_SHORT).show()
+                }
+
+                else -> { /* Loading handled by UI */
                 }
             }
+        }
+    }
 
-            is Resource.Error -> {
-                val errorMsg = state.exception
-                messages.add(ChatMessage(errorMsg, isUser = false, isError = true))
-                Toast.makeText(context, "Ошибка: $errorMsg", Toast.LENGTH_SHORT).show()
-            }
+    // 3.1 Обработка ответов от сервера (AI Configuration Mode)
+    LaunchedEffect(aiChatState) {
+        if (currentMode != AIMode.Text) {
+            when (val state = aiChatState) {
+                is Resource.Success -> {
+                    val data = state.data
 
-            else -> { /* Loading или Idle обрабатываются в UI через флаг isLoading */
+                    // --- ДОБАВЛЕНО СОХРАНЕНИЕ ---
+                    // Сохраняем полученный ответ конфигуратора
+                    SharedPreference.SaveData(context).saveAIChatResponse(data)
+                    // -----------------------------
+
+                    val formattedResponse = buildString {
+                        append(data.comment)
+                    }
+
+                    val lastMsg = messages.lastOrNull()
+                    // Проверка на дубликаты
+                    if (lastMsg == null || lastMsg.isUser || lastMsg.text != formattedResponse) {
+                        messages.add(
+                            ChatMessage(
+                                text = formattedResponse,
+                                isUser = false,
+                                // Передаем компоненты в сообщение
+                                products = data.components
+                            )
+                        )
+                    }
+                }
+
+                is Resource.Error -> {
+                    val errorMsg = state.exception
+                    messages.add(ChatMessage("Ошибка: $errorMsg", isUser = false, isError = true))
+                    Toast.makeText(context, "Ошибка: $errorMsg", Toast.LENGTH_SHORT).show()
+                }
+
+                else -> { /* Loading handled by UI */
+                }
             }
         }
     }
@@ -98,7 +176,6 @@ fun AssistantPageUI(
     // 4. Автопрокрутка вниз при добавлении сообщений
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            // Скроллим к последнему элементу. Если идет загрузка, UI сам проскроллит до "пузыря"
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -106,8 +183,22 @@ fun AssistantPageUI(
     // 5. Функция отправки
     fun sendMessage(text: String) {
         if (text.isBlank()) return
+
+        // Добавляем в UI только текст пользователя
         messages.add(ChatMessage(text, true))
-        viewModel.chat(ChatRequest(text))
+
+        if (currentMode == AIMode.Text) {
+            // Старая логика для текстового режима
+            viewModel.chat(ChatRequest(text))
+        } else {
+            // Новая логика для конфигуратора
+            aiViewModel.aiChat(
+                AIChatRequest(
+                    prompt = text,
+                    mode = currentMode
+                )
+            )
+        }
     }
 
     // --- 6. Обработка входящего prompt (автоотправка) ---
@@ -121,40 +212,38 @@ fun AssistantPageUI(
     }
 
     val handleBack: () -> Unit = {
-        // Лог для отладки (как вы просили ранее)
-        val currentRoute = navigationController.currentBackStackEntry?.destination?.route
         val targetRoute = navigationController.previousBackStackEntry?.destination?.route
-        android.util.Log.d("NavigationLog", "Back Action. Current: $currentRoute, Target: $targetRoute")
-
         if (targetRoute == Screens.SearchPage.screen) {
-            navigationController.navigate(Screens.MainPage.screen) {
-                popUpTo(0)
-            }
+            navigationController.navigate(Screens.MainPage.screen) { popUpTo(0) }
         } else {
             try {
                 navigationController.popBackStack()
             } catch (e: Exception) {
-                // Если стек пуст или ошибка, на всякий случай идем на главную
                 navigationController.navigate(Screens.MainPage.screen) { popUpTo(0) }
             }
         }
     }
 
-    // 1. Перехватываем системный жест/кнопку "Назад"
     BackHandler(enabled = true, onBack = handleBack)
+
+    // Вычисляем общее состояние загрузки
+    val isAnyLoading = chatState is Resource.Loading || aiChatState is Resource.Loading
 
     // 7. Отображение экрана
     AssistantScreen(
         paddingValues = paddingValues,
         messages = messages,
-        isLoading = chatState is Resource.Loading,
+        isLoading = isAnyLoading,
         listState = listState,
-        // 2. Передаем ту же самую функцию в кнопку UI
+        currentMode = currentMode,
+        onModeChange = { newMode -> currentMode = newMode },
         onBackClick = handleBack,
         onHistoryClick = { navigationController.navigate(Screens.AssistantHistoryPage.screen) },
-        onSendMessage = { sendMessage(it) }
+        onSendMessage = { sendMessage(it) },
+        context = contextM
     )
 }
+
 
 // --- ОСНОВНОЙ ЭКРАН (UI) ---
 @Composable
@@ -163,9 +252,12 @@ fun AssistantScreen(
     messages: List<ChatMessage>,
     isLoading: Boolean,
     listState: LazyListState,
+    currentMode: AIMode,
+    onModeChange: (AIMode) -> Unit,
     onBackClick: () -> Unit,
     onHistoryClick: () -> Unit,
-    onSendMessage: (String) -> Unit
+    onSendMessage: (String) -> Unit,
+    context: MainActivity,
 ) {
     val density = LocalDensity.current
     val keyboardHeightPx = WindowInsets.ime.getBottom(density)
@@ -186,6 +278,8 @@ fun AssistantScreen(
             bottomBar = {
                 AssistantInputArea(
                     isLoading = isLoading,
+                    currentMode = currentMode,
+                    onModeChange = onModeChange,
                     onSendMessage = onSendMessage
                 )
             }
@@ -201,7 +295,8 @@ fun AssistantScreen(
                     MessageList(
                         messages = messages,
                         isLoading = isLoading,
-                        listState = listState
+                        listState = listState,
+                        context = context,
                     )
                 }
             }
@@ -225,7 +320,7 @@ fun AssistantTopBar(
     ) {
         IconButton(onClick = onBackClick) {
             Icon(
-                painter = painterResource(R.drawable.ic_profile_quit),
+                painter = painterResource(R.drawable.ic_arrow_back_black_24),
                 contentDescription = "Назад",
                 tint = Color.Gray,
                 modifier = Modifier
@@ -266,95 +361,222 @@ fun AssistantTopBar(
 @Composable
 fun AssistantInputArea(
     isLoading: Boolean,
+    currentMode: AIMode,
+    onModeChange: (AIMode) -> Unit,
     onSendMessage: (String) -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
+    var isModeSelectorVisible by remember { mutableStateOf(false) }
 
-    Box(
+    // Анимируем появление меню
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
-            .padding(16.dp)
     ) {
-        // Серый контейнер
-        Box(
+        // Выезжающее меню режимов
+        AnimatedVisibility(
+            visible = isModeSelectorVisible,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn() + expandVertically(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut() + shrinkVertically()
+        ) {
+            ModeSelector(
+                currentMode = currentMode,
+                onModeSelected = {
+                    onModeChange(it)
+                    isModeSelectorVisible = false
+                }
+            )
+        }
+
+        // Основная строка ввода
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFFF5F5F5))
-                // Минимальная высота, чтобы поле выглядело аккуратно даже пустым
-                .defaultMinSize(minHeight = 56.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
-            // Поле ввода текста
-            BasicTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
+            // Серый контейнер (Поле ввода)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.CenterStart)
-                    // Важно: end = 60.dp, чтобы текст не уходил под кнопку отправки
-                    .padding(start = 20.dp, top = 16.dp, bottom = 16.dp, end = 60.dp),
-                textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
-                // ImeAction.Default позволяет делать перенос строки (Enter)
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (inputText.isEmpty()) {
-                            Text(
-                                "Что сегодня будем искать?",
-                                color = Color.Gray,
-                                fontSize = 16.sp
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-                singleLine = false, // Разрешаем многострочность
-                maxLines = 6,       // Ограничиваем высоту поля 6 строками
-                enabled = !isLoading
-            )
-
-            // Кнопка отправки
-            IconButton(
-                onClick = {
-                    if (!isLoading) {
-                        onSendMessage(inputText.trim())
-                        inputText = ""
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd) // Прижимаем кнопку к правому нижнему углу
-                    .padding(end = 8.dp, bottom = 8.dp) // Отступы справа и снизу по 12dp
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(if (isLoading) Color.Gray else Color(0xFFFF8C00)),
-                enabled = !isLoading
+                    .weight(1f)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color(0xFFF5F5F5))
+                    .defaultMinSize(minHeight = 56.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(28.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
+                // 1. КНОПКА ВЫБОРА РЕЖИМА (ТЕПЕРЬ СЛЕВА ВНУТРИ)
+                IconButton(
+                    onClick = { isModeSelectorVisible = !isModeSelectorVisible },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart) // Прижимаем влево вниз
+                        .padding(8.dp) // Отступы от края
+                        .size(40.dp) // Размер как у кнопки отправки
+                        .clip(CircleShape)
+                        // Меняем цвет если меню открыто
+                        .background(if (isModeSelectorVisible) Color(0xFFFF8C00) else Color.Transparent)
+                ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_ai_assistant),
-                        contentDescription = "Send",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        // Убедитесь, что иконка правильная (в исходном коде она обрезана, я поставил заглушку)
+                        painter = painterResource(R.drawable.ic_rsu_improve),
+                        contentDescription = "Mode",
+                        // Меняем цвет иконки для контраста
+                        tint = if (isModeSelectorVisible) Color.White else Color.Gray,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
+
+                // 2. ПОЛЕ ВВОДА
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.CenterStart)
+                        // ВАЖНО: увеличен start padding (было 20.dp, стало 48.dp), чтобы текст не наезжал на левую кнопку
+                        .padding(start = 48.dp, top = 16.dp, bottom = 16.dp, end = 50.dp),
+                    textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (inputText.isEmpty()) {
+                                Text(
+                                    text = stringResource(currentMode.titleRes),
+                                    color = Color.Gray,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                    singleLine = false,
+                    maxLines = 6,
+                    enabled = !isLoading
+                )
+
+                // 3. КНОПКА ОТПРАВКИ (СПРАВА ВНУТРИ - без изменений)
+                IconButton(
+                    onClick = {
+                        if (!isLoading) {
+                            onSendMessage(inputText.trim())
+                            inputText = ""
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 8.dp, start = 8.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (isLoading) Color.Gray else Color(0xFFFF8C00)),
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_ai_assistant),
+                            contentDescription = "Send",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
             }
+
+            // Spacer и внешний IconButton удалены
         }
     }
 }
 
 
 @Composable
+fun ModeSelector(
+    currentMode: AIMode,
+    onModeSelected: (AIMode) -> Unit
+) {
+    val modes = listOf(AIMode.Text, AIMode.Configuration, AIMode.SmartSearch)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Выберите режим работы",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.Gray,
+            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+        )
+
+        modes.forEach { mode ->
+            val isSelected = currentMode::class == mode::class
+            val backgroundColor = if (isSelected) Color(0xFFFFF3E0) else Color.White
+            val borderColor = if (isSelected) Color(0xFFFF8C00) else Color(0xFFE0E0E0)
+            val textColor = if (isSelected) Color(0xFFEF6C00) else Color.Black
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { onModeSelected(mode) },
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, borderColor),
+                colors = CardDefaults.cardColors(containerColor = backgroundColor)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Иконка режима (можно добавить свои иконки в sealed class AIMode для красоты)
+                    Icon(
+                        painter = painterResource(
+                            when (mode) {
+                                is AIMode.Text -> R.drawable.ic_ai_assistant
+                                is AIMode.Configuration -> R.drawable.ic_rsu_cpu // Замените на актуальную иконку ПК
+                                is AIMode.SmartSearch -> R.drawable.ic_home_search // Замените на актуальную иконку поиска
+                            }
+                        ),
+                        contentDescription = null,
+                        tint = textColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = stringResource(mode.titleRes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = textColor
+                    )
+
+                    if (isSelected) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_path), // Убедитесь что есть иконка галочки
+                            contentDescription = "Selected",
+                            tint = Color(0xFFFF8C00),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
 fun MessageList(
     messages: List<ChatMessage>,
     isLoading: Boolean,
-    listState: LazyListState
+    listState: LazyListState,
+    context: MainActivity,
 ) {
     LaunchedEffect(isLoading) {
         if (isLoading) {
@@ -371,7 +593,7 @@ fun MessageList(
         modifier = Modifier.fillMaxSize()
     ) {
         items(messages) { message ->
-            MessageBubble(message)
+            MessageBubble(message, context)
         }
 
         if (isLoading) {
@@ -396,7 +618,7 @@ fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Я готов помочь. Спроси меня о чем угодно!",
+            text = "Я готов помочь. Выберите режим и спросите меня о чем угодно!",
             style = MaterialTheme.typography.bodyLarge,
             color = Color.Gray,
             textAlign = TextAlign.Center,
@@ -406,7 +628,10 @@ fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MessageBubble(message: ChatMessage) {
+fun MessageBubble(
+    message: ChatMessage,
+    context: MainActivity,
+) {
     val backgroundColor = when {
         message.isError -> Color(0xFFFFEBEE)
         message.isUser -> Color(0xFFFF8C00)
@@ -422,10 +647,8 @@ fun MessageBubble(message: ChatMessage) {
         RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
     }
 
-    // 1. Создаем переменную для анимации прозрачности
     val alphaAnim = remember { Animatable(if (message.isUser) 1f else 0f) }
 
-    // 2. Запускаем анимацию "проявления" только для сообщений бота
     LaunchedEffect(message) {
         if (!message.isUser) {
             alphaAnim.animateTo(
@@ -436,26 +659,19 @@ fun MessageBubble(message: ChatMessage) {
     }
 
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = alignment) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .graphicsLayer {
-                    alpha = alphaAnim.value
-                }
-                .clip(shape)
-                .background(backgroundColor)
-                .padding(12.dp)
-        ) {
-            if (message.isUser) {
-                Text(text = message.text, color = contentColor, fontSize = 16.sp)
-            } else {
-                MaterialTheme(
-                    colorScheme = MaterialTheme.colorScheme.copy(
-                        onSurface = contentColor,
-                        onSurfaceVariant = contentColor,
-                        surface = Color.Transparent
-                    )
-                ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .graphicsLayer {
+                        alpha = alphaAnim.value
+                    }
+                    .clip(shape)
+                    .background(backgroundColor)
+                    .padding(12.dp)
+            ) {
+                // Используем Column, чтобы разместить товары под текстом
+                Column {
                     val customTypography = markdownTypography(
                         h1 = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         h2 = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -466,10 +682,41 @@ fun MessageBubble(message: ChatMessage) {
                         paragraph = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp)
                     )
 
-                    Markdown(
-                        content = message.text,
-                        typography = customTypography,
-                        modifier = Modifier.fillMaxWidth()
+                    // 1. Основной текст сообщения
+                    if (message.isUser) {
+                        Text(
+                            text = message.text,
+                            color = contentColor,
+                            fontSize = 16.sp
+                        )
+                    } else {
+                        Markdown(
+                            content = message.text,
+                            typography = customTypography
+                        )
+                    }
+                }
+            }
+            // 2. Список товаров (если они есть и это сообщение от бота)
+            // Предполагается, что в ChatMessage есть поле products
+            if (!message.isUser && message.products?.isNotEmpty() == true) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+
+
+                message.products.forEach { product ->
+                    // Разделитель между товарами (если нужно)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ВАШ ГОТОВЫЙ КОМПОНЕНТ
+                    ProductItem(
+                        title = product.model,
+                        imageUrl = product.src,
+                        price = product.price,
+                        oldPrice = product.price * 1.2.toInt(),
+                        rating = 4.8,
+                        reviewsCount = 123,
+                        onClick = { /* Обработка клика по товару */ }
                     )
                 }
             }
@@ -480,92 +727,59 @@ fun MessageBubble(message: ChatMessage) {
 
 @Composable
 fun TypingBubble() {
-    val dotSize = 8.dp
-    val spaceBetween = 4.dp
-    val travelDistance = 6.dp
     val dotColor = Color.Gray
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
 
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
+    // Анимация для трех точек
     val offset1 by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 0f,
+        initialValue = 0f, targetValue = -10f,
         animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1200
-                0.0f at 0 using LinearOutSlowInEasing
-                -travelDistance.value at 300 using LinearOutSlowInEasing
-                0.0f at 600 using LinearOutSlowInEasing
-                0.0f at 1200 using LinearOutSlowInEasing
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dot1"
+            animation = tween(300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "dot1"
     )
     val offset2 by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 0f,
+        initialValue = 0f, targetValue = -10f,
         animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1200
-                0.0f at 0 using LinearOutSlowInEasing
-                0.0f at 200 using LinearOutSlowInEasing
-                -travelDistance.value at 500 using LinearOutSlowInEasing
-                0.0f at 800 using LinearOutSlowInEasing
-                0.0f at 1200 using LinearOutSlowInEasing
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dot2"
+            animation = tween(300, delayMillis = 100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "dot2"
     )
     val offset3 by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 0f,
+        initialValue = 0f, targetValue = -10f,
         animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1200
-                0.0f at 0 using LinearOutSlowInEasing
-                0.0f at 400 using LinearOutSlowInEasing
-                -travelDistance.value at 700 using LinearOutSlowInEasing
-                0.0f at 1000 using LinearOutSlowInEasing
-                0.0f at 1200 using LinearOutSlowInEasing
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dot3"
+            animation = tween(300, delayMillis = 200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "dot3"
     )
 
-    val shape = RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
-    val backgroundColor = Color(0xFFF5F5F5)
-
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .clip(shape)
-                .background(backgroundColor)
-                .animateContentSize()
-                .padding(16.dp)
+                .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp))
+                .background(Color(0xFFF5F5F5))
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.height(24.dp)
-            ) {
-                Dot(offset1, dotSize, dotColor)
-                Spacer(Modifier.width(spaceBetween))
-                Dot(offset2, dotSize, dotColor)
-                Spacer(Modifier.width(spaceBetween))
-                Dot(offset3, dotSize, dotColor)
-            }
+            Dot(offset1, dotColor)
+            Dot(offset2, dotColor)
+            Dot(offset3, dotColor)
         }
     }
 }
 
 @Composable
-fun Dot(offset: Float, size: androidx.compose.ui.unit.Dp, color: Color) {
+fun Dot(offset: Float, color: Color) {
     Box(
         modifier = Modifier
-            .offset(y = offset.dp)
-            .size(size)
-            .clip(CircleShape)
-            .background(color)
+            .size(8.dp)
+            .graphicsLayer { translationY = offset }
+            .background(color, CircleShape)
     )
 }

@@ -11,4 +11,7 @@
     <string name="assistant_history_page">Assistant History Page</string>
     <string name="product_page">Product page</string>
     <string name="product_list_page">Product list page</string>
+    <string name="text_mode">Просто режим диалога</string>
+    <string name="configuration_mode">Режим сборки конфигурации ПК</string>
+    <string name="smart_search_mode">Режим умного поиска</string>
 </resources>

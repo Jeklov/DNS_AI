@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.jeklov.dns.R
+import com.jeklov.dns.data.api.ai.chat.models.AIMode
 import com.jeklov.dns.ui.screens.Screens
 
 @Composable
@@ -72,9 +73,9 @@ fun SearchPageUI(
     fun performSearch() {
         if (searchQuery.isNotBlank()) {
             val route = if (isAssistantEnabled) {
-                Screens.AssistantPage.screen + "/" + searchQuery // Замените на ваш реальный роут для ИИ
+                Screens.AssistantPage.screen + "/" + searchQuery + "/" + AIMode.SmartSearch.name // Замените на ваш реальный роут для ИИ
             } else {
-                Screens.SearchPage.screen + "/" + searchQuery // Замените на ваш реальный роут каталога/поиска
+                Screens.ProductListPage.screen + "/" + searchQuery // Замените на ваш реальный роут каталога/поиска
             }
             navigationController.navigate(route)
         }
@@ -109,7 +110,7 @@ fun SearchPageUI(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_profile_quit),
+                    painter = painterResource(R.drawable.ic_arrow_back_black_24),
                     contentDescription = "Back",
                     tint = Color.Gray,
                     modifier = Modifier
@@ -117,6 +118,7 @@ fun SearchPageUI(
                         .clip(RoundedCornerShape(24.dp))
                         .clickable { navigationController.popBackStack() }
                         .padding(12.dp)
+                        .align(Alignment.TopStart)
                 )
             }
 
@@ -159,18 +161,18 @@ fun SearchPageUI(
                         modifier = Modifier
                             .fillMaxWidth() // Заполняем ширину
                             .padding(horizontal = 12.dp, vertical = 12.dp), // Отступы внутри поля
-                        verticalAlignment = Alignment.CenterVertically // Иконки центрируем по вертикали внутри Row (но так как это multi-line, поведение зависит от контента)
+                        verticalAlignment = Alignment.Top // Иконки центрируем по вертикали внутри Row (но так как это multi-line, поведение зависит от контента)
                     ) {
                         // Иконка лупы всегда сверху, если поле большое
                         Box(
-                            modifier = Modifier.height(20.dp),
+                            modifier = Modifier.height(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_home_search),
                                 contentDescription = null,
                                 tint = Color.Gray,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -189,15 +191,16 @@ fun SearchPageUI(
                         }
                         if (searchQuery.isNotEmpty()) {
                             Box(
-                                modifier = Modifier.height(20.dp),
+                                modifier = Modifier.height(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_profile_quit),
+                                    painter = painterResource(R.drawable.ic_cross),
                                     contentDescription = "Clear",
                                     tint = Color.Gray,
                                     modifier = Modifier
                                         .clickable { searchQuery = "" }
+                                        .size(24.dp)
                                 )
                             }
                         }

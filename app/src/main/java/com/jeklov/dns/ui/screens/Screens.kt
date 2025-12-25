@@ -30,14 +30,16 @@ sealed class Screens(
     data object ProductPage : Screens(
         titleRes = R.string.product_page,
         screen = "product_page",
-        lottieRes = R.raw.home_nav_button_animation,
+        showIconOnBottomBar = false,
+        showBottomBar = false,
     )
 
     // Product list page
     data object ProductListPage : Screens(
         titleRes = R.string.product_list_page,
         screen = "product_list_page",
-        lottieRes = R.raw.home_nav_button_animation,
+        showIconOnBottomBar = false,
+        showBottomBar = false,
     )
 
     // Assistant

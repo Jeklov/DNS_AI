@@ -146,7 +146,7 @@ fun SearchBarHeader(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(RoundedCornerShape(CornerSize(4.dp)))
-                            .clickable { navigationController.navigate(Screens.AssistantPage.screen + "/") }
+                            .clickable { navigationController.navigate(Screens.AssistantPage.screen + "/"  + "/") }
                     )
                 }
             }
